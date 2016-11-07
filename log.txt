@@ -1,0 +1,17 @@
+390  [main] DEBUG Messanger.Service.ServerService - Server is starting...
+953  [main] DEBUG Messanger.Service.ServerService - Server started, listen on the 9001 port.
+778  [main] INFO  Messanger.Service.ClientService - Client is starting...
+5567 [Thread-0] DEBUG Messanger.Service.ServerService - Dodaje...Ala
+5567 [Thread-0] DEBUG Messanger.Service.ServerService - [Server]: Ala isn't in repository.
+5568 [Thread-0] DEBUG Messanger.Service.ServerService - [Server]: Ala connected.
+3451 [main] INFO  Messanger.Service.ClientService - [C]: [Ljava.lang.String;@3530cd4a
+783  [main] INFO  Messanger.Service.ClientService - Client is starting...
+24754 [Thread-1] DEBUG Messanger.Service.ServerService - Dodaje...Momo
+24754 [Thread-1] DEBUG Messanger.Service.ServerService - [Server]: Momo isn't in repository.
+24754 [Thread-1] DEBUG Messanger.Service.ServerService - [Server]: Momo connected.
+22637 [main] INFO  Messanger.Service.ClientService - Newuser =Momo
+3184 [main] INFO  Messanger.Service.ClientService - [C]: [Ljava.lang.String;@45fda6a8
+32034 [Thread-1] DEBUG Messanger.Service.ServerService - java.net.SocketException: Connection reset
+32036 [Thread-1] DEBUG Messanger.Service.ServerService - [Server]: Momo disconnected.
+34184 [Thread-0] DEBUG Messanger.Service.ServerService - java.net.SocketException: Connection reset
+34185 [Thread-0] DEBUG Messanger.Service.ServerService - [Server]: Ala disconnected.
