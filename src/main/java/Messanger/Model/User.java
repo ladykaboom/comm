@@ -1,13 +1,13 @@
 package Messanger.Model;
 
-import java.io.PrintWriter;
+import java.io.Serializable;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 
 @Entity
-public class User {
+public class User implements Serializable {
 
 	@Id
 	private int id;
@@ -25,8 +25,8 @@ public class User {
 	private String status;
 
 	@Column
-	private PrintWriter out;
-
+	private String ip;
+	
 	public User() {
 		// this.name = name;
 		this.status = "NIEDOSTĘPNY";
@@ -38,14 +38,6 @@ public class User {
 
 	public void setName(String name) {
 		this.name = name;
-	}
-
-	public PrintWriter getOut() {
-		return out;
-	}
-
-	public void setOut(PrintWriter out) {
-		this.out = out;
 	}
 
 	public String getStatus() {
@@ -104,5 +96,14 @@ public class User {
 		this.id = id;
 		return this;
 	}
+
+	public String getIp() {
+		return ip;
+	}
+
+	public void setIp(String ip) {
+		this.ip = ip;
+	}
+
 	
 }

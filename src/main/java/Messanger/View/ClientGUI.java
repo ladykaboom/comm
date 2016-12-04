@@ -18,6 +18,8 @@ import javax.swing.JTextField;
 import javax.swing.UIManager;
 import javax.swing.border.LineBorder;
 
+import Messanger.Service.ClientMessageQueueService;
+
 public class ClientGUI {
 
 	private JFrame frame = new JFrame("Messanger");
@@ -30,6 +32,9 @@ public class ClientGUI {
 	private final JPanel panel_1 = new JPanel();
 	private final JButton btnNewButton = new JButton("Wyślij");
 	private final JTextArea textArea = new JTextArea(8, 40);
+	
+	//keep message until the bus comes
+	private ClientMessageQueueService clientMessageQueueService;
 
 	public ClientGUI(String nickName) {
 		messageArea.setEditable(false);
@@ -55,7 +60,9 @@ public class ClientGUI {
 		btnNewButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				if (textArea.getText() != null && !textArea.getText().equals("")) {
-					out.println(textFieldWho.getText() + ";" + textArea.getText());
+					clientMessageQueueService.addMessageToQueue(textFieldWho.getText(), textArea.getText());
+					clientMessageQueueService.displayMessageQueue();
+					//out.println(textFieldWho.getText() + ";" + textArea.getText());
 					textArea.setText("");
 				}
 			}
@@ -103,4 +110,13 @@ public class ClientGUI {
 		return textArea;
 	}
 
+	public ClientMessageQueueService getClientMessageQueueService() {
+		return clientMessageQueueService;
+	}
+
+	public void setClientMessageQueueService(ClientMessageQueueService clientMessageQueueService) {
+		this.clientMessageQueueService = clientMessageQueueService;
+	}
+
+	
 }

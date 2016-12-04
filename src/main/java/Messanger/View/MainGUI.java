@@ -29,14 +29,14 @@ public class MainGUI implements ListSelectionListener {
 	private PrintWriter out;
 	private ClientGUI clientGUI;
 
+	private String tempMsg;
+
 	public MainGUI() {
 
+		tempMsg = "";
+		
 		listModel = new DefaultListModel();
-		// listModel.addElement("Ala");
-		// listModel.addElement("Marcin");
-		// listModel.addElement("Alek");
-		// listModel.addElement("Momo");
-
+		
 		panel_1 = new JPanel();
 		frame.getContentPane().add(panel_1, BorderLayout.NORTH);
 		panel_1.setLayout(new BorderLayout(0, 0));
@@ -88,6 +88,11 @@ public class MainGUI implements ListSelectionListener {
 				clientGUI.getTextFieldWho().setText(toWhom);
 				clientGUI.getTextArea().setEditable(true);
 				clientGUI.getTextFieldWho().setEditable(true);
+				
+				if(!tempMsg.equals("")) {
+					clientGUI.getMessageArea().append(tempMsg);
+					setTempMsg("");
+				}
 			}
 		}
 	}
@@ -95,7 +100,7 @@ public class MainGUI implements ListSelectionListener {
 	public void initOut(OutputStream output) {
 		this.out = new PrintWriter(output, true);
 	}
-
+	
 	public JFrame getFrame() {
 		return frame;
 	}
@@ -120,4 +125,13 @@ public class MainGUI implements ListSelectionListener {
 		this.clientGUI = clientGUI;
 	}
 
+	public String getTempMsg() {
+		return tempMsg;
+	}
+
+	public void setTempMsg(String tempMsg) {
+		this.tempMsg = tempMsg;
+	}
+
+	
 }
