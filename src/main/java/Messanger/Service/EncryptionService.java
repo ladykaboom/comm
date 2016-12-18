@@ -13,8 +13,8 @@ import javax.crypto.Cipher;
 public class EncryptionService {
 
 	public static final String ALGORITHM = "RSA";
-	public static final String PRIVATE_KEY_FILE = "C:/private.key";
-	public static final String PUBLIC_KEY_FILE = "C:/public.key";
+	public static final String PRIVATE_KEY_FILE = "private.key";
+	public static final String PUBLIC_KEY_FILE = "public.key";
 
 	private static File privateKeyFile;
 	private static File publicKeyFile;
@@ -78,7 +78,7 @@ public class EncryptionService {
 	 * 
 	 */
 	public String decrypt(byte[] text, PrivateKey key) {
-		byte[] dectyptedText = null;
+		byte[] dectyptedText = "".getBytes();
 		try {
 			// get an RSA cipher object and print the provider
 			final Cipher cipher = Cipher.getInstance(ALGORITHM);
@@ -86,6 +86,7 @@ public class EncryptionService {
 			// decrypt the text using the private key
 			cipher.init(Cipher.DECRYPT_MODE, key);
 			dectyptedText = cipher.doFinal(text);
+			System.out.println("\nDecryptedText = " + dectyptedText);
 
 		} catch (Exception ex) {
 			ex.printStackTrace();

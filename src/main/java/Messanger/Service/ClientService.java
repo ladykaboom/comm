@@ -30,12 +30,20 @@ import Messanger.View.ClientGUI;
 
 public class ClientService {
 
+	/* if ring is too large, this flag will be set to true */
+	private static boolean stopSending = false;
+	private static boolean sharedNode = false;
+
 	private final static Logger log = LoggerFactory.getLogger(ClientService.class);
 
 	private final static String HOST = "192.168.1.2";
 	private final static int PORT = 9000;
 	private final static int CLIENT_PORT = 9001;
 	private final static int nextClientPort = 8002;
+
+	/* only if client is shared by two rings! */
+	private final static int SECOND_CLIENT_PORT = 8004;
+	private final static int secondNxtClientPort = 8005;
 
 	private static PublicKey publicKey;
 	private static PrivateKey privateKey;
@@ -47,12 +55,15 @@ public class ClientService {
 	private static ClientMessageQueueService clientMessageQueueService;
 
 	private BufferedReader inServer;
+	private PrintWriter outServer;
 	private static ObjectOutputStream outNextClient;
 
-	private static Bus bus;
+	private static Bus globalBus;
+	private static int user_in_bus_index = -1;
 
-	/* 0 - no bus, 1 - bus just created, 2 - bus has been created */
-	private static int bus_flag = 0;
+	/* only for 'shared client' */
+	private static Bus secondBus;
+	private static volatile boolean sendBusSemafor = true;
 
 	public ClientService()
 			throws IOException, NoSuchAlgorithmException, NoSuchProviderException, NoSuchPaddingException {
@@ -89,6 +100,7 @@ public class ClientService {
 		SSLSocketFactory sslsocketfactory = (SSLSocketFactory) SSLSocketFactory.getDefault();
 		SSLSocket socket = (SSLSocket) sslsocketfactory.createSocket(HOST, PORT);
 		inServer = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+		outServer = new PrintWriter(socket.getOutputStream(), true);
 
 		/* prepare server socket for new client */
 		SSLServerSocketFactory sslserversocketfactoryPrevUser;
@@ -96,8 +108,10 @@ public class ClientService {
 		sslserversocketfactoryPrevUser = (SSLServerSocketFactory) SSLServerSocketFactory.getDefault();
 		sslserversocketPrevUser = (SSLServerSocket) sslserversocketfactoryPrevUser.createServerSocket(CLIENT_PORT);
 
-		ClientConnectionHandler clientConnectionHandler = new ClientConnectionHandler(sslserversocketPrevUser);
+		ClientConnectionHandler clientConnectionHandler = new ClientConnectionHandler(sslserversocketPrevUser, true);
 		clientConnectionHandler.start();
+
+		/* ONLY FOR SHARED NODE! Prepare socket for client from second ring */
 
 		// init gui
 		clientGUI.initOut(socket.getOutputStream());
@@ -125,9 +139,36 @@ public class ClientService {
 				NextClient nextClient = new NextClient(socketNextUser);
 				nextClient.start();
 			} else if (line.startsWith("CREATE_BUS")) {
-				bus = new Bus();
-				bus.addNewClientToBus(name, publicKey);
-				bus_flag = 1;
+				globalBus = new Bus();
+				globalBus.addNewClientToBus(name, publicKey);
+			} else if (line.startsWith("STOP_SENDING")) {
+				stopSending = true;
+
+				/* if I have bus, send my name to server */
+				if (globalBus != null) {
+					outServer.println("HAVE_BUS " + user_in_bus_index);
+				}
+			} else if (line.startsWith("SHARED")) {
+				/**
+				 * this client will be shared by two rings. It has to merge two
+				 * buses from these two rings
+				 */
+				sharedNode = true;
+				sendBusSemafor = false;
+
+				/* prepare server socket for new client */
+				SSLServerSocketFactory new_sslserversocketfactoryPrevUser;
+				SSLServerSocket new_sslserversocketPrevUser;
+				new_sslserversocketfactoryPrevUser = (SSLServerSocketFactory) SSLServerSocketFactory.getDefault();
+				new_sslserversocketPrevUser = (SSLServerSocket) new_sslserversocketfactoryPrevUser
+						.createServerSocket(CLIENT_PORT);
+
+				ClientConnectionHandler new_clientConnectionHandler = new ClientConnectionHandler(
+						new_sslserversocketPrevUser, false);
+				new_clientConnectionHandler.start();
+
+				new SharedNodeHandler().start();
+
 			}
 		}
 	}
@@ -140,17 +181,40 @@ public class ClientService {
 	 */
 	private static class ClientConnectionHandler extends Thread {
 		private SSLServerSocket sslserversocketPrevUser;
+		private boolean isFirstBus;
 
-		public ClientConnectionHandler(SSLServerSocket sslserversocketPrevUser) {
+		public ClientConnectionHandler(SSLServerSocket sslserversocketPrevUser, boolean isFirstBus) {
 			this.sslserversocketPrevUser = sslserversocketPrevUser;
+			this.isFirstBus = isFirstBus;
 		}
 
 		public void run() {
 			while (true) {
 				try {
-					new ConnectionHandler((SSLSocket) this.sslserversocketPrevUser.accept()).start();
+					new ConnectionHandler((SSLSocket) this.sslserversocketPrevUser.accept(), isFirstBus).start();
 				} catch (IOException e) {
 					e.printStackTrace();
+				}
+			}
+		}
+	}
+
+	/**
+	 * synchronized Buses
+	 */
+	private static class SharedNodeHandler extends Thread {
+
+		public SharedNodeHandler() {
+		}
+
+		public void run() {
+			while (true) {
+
+				if (sharedNode == true && globalBus != null && secondBus != null) {
+					/* merge buses (copy msgs from secondBus to bus */
+
+					secondBus.setBus(globalBus.getBus());
+					sendBusSemafor = true;
 				}
 			}
 		}
@@ -205,10 +269,13 @@ public class ClientService {
 		private SSLSocket socketConHand;
 		private ObjectInputStream in;
 		private PrintWriter out;
+		private boolean firstBus;
+		private Bus myBus;
 
-		public ConnectionHandler(SSLSocket socket) throws IOException {
+		public ConnectionHandler(SSLSocket socket, boolean firstBus) throws IOException {
 			log.debug("run....constr...");
 			this.socketConHand = socket;
+			this.firstBus = firstBus;
 		}
 
 		public void run() {
@@ -224,6 +291,9 @@ public class ClientService {
 
 				while (true) {
 
+					while (stopSending == true) {
+						sleep(1000);
+					}
 					/* wait for connection with next client */
 					while (outNextClient == null) {
 						log.debug("outnext null...waiting...");
@@ -231,24 +301,23 @@ public class ClientService {
 					}
 
 					/* get bus from previous client */
-					if (bus == null) {
-						bus = (Bus) in.readObject();
-						if (bus == null) {
+					if (myBus == null) {
+						myBus = (Bus) in.readObject();
+						if (myBus == null) {
 							return;
 						}
 
-						log.debug("\nDostalam userList size = " + bus.getUsers().size());
-						bus.displayBus();
+						log.debug("\nDostalam userList size = " + myBus.getUsers().size());
+						myBus.displayBus();
 						sleep(2000);
 					}
 
 					/* get user header */
-					String myHeader = prepareHeader(name, bus.getLoop());
+					String myHeader = prepareHeader(name, myBus.getLoop());
 
 					/* get current user index */
-					int user_in_bus_index = -1;
-					for (int i = 0; i < bus.getUsers().size(); i++) {
-						if (bus.getUsers().get(i).equals(name)) {
+					for (int i = 0; i < myBus.getUsers().size(); i++) {
+						if (myBus.getUsers().get(i).equals(name)) {
 							user_in_bus_index = i;
 							break;
 						}
@@ -256,15 +325,15 @@ public class ClientService {
 
 					/* add user to the bus */
 					if (user_in_bus_index == -1) {
-						bus.addNewClientToBus(name, publicKey);
-						user_in_bus_index = bus.getUsers().size() - 1;
+						myBus.addNewClientToBus(name, publicKey);
+						user_in_bus_index = myBus.getUsers().size() - 1;
 					} else {
 						/* read message from the bus */
-						for (int i = 0; i < bus.getUsers().size(); i++) {
-							String userName = bus.getUsers().get(i);
+						for (int i = 0; i < myBus.getUsers().size(); i++) {
+							String userName = myBus.getUsers().get(i);
 
 							if (!userName.equals(name)) {
-								LinkedList<byte[]> row_reading = bus.getBus().get(i);
+								LinkedList<byte[]> row_reading = myBus.getBus().get(i);
 
 								if (row_reading.get(user_in_bus_index) != null) {
 
@@ -272,36 +341,38 @@ public class ClientService {
 									byte[] msgByte = row_reading.get(user_in_bus_index);
 
 									/* decrypt message */
-									String msg = encryptionService.decrypt(msgByte, privateKey);
+									if (msgByte != null) {
+										String msg = encryptionService.decrypt(msgByte, privateKey);
 
-									/* check header */
-									if (msg.startsWith(myHeader)) {
-										System.out.println(
-												"\nReading... msg: " + msg + " ; from user: " + userName + "\n");
-										clientGUI.getMessageArea().append(userName + ": " + msg + "\n");
+										/* check header */
+										if (msg.startsWith(myHeader)) {
+											System.out.println(
+													"\nReading... msg: " + msg + " ; from user: " + userName + "\n");
+											clientGUI.getMessageArea().append(userName + ": " + msg + "\n");
+										}
 									}
 								}
 							}
 						}
 					}
 
-					log.debug("\nBus size = " + bus.getBus().size());
+					log.debug("\nBus size = " + myBus.getBus().size());
 
 					/*
 					 * If current user is the first user in the ring, increment
 					 * bus loop
 					 */
 					if (user_in_bus_index == 0) {
-						bus.incrementLoop();
+						myBus.incrementLoop();
 					}
 
-					log.debug("\n Bus loop = " + bus.getLoop());
+					log.debug("\n Bus loop = " + myBus.getLoop());
 
 					/* create row to put messages to it */
 					LinkedList<byte[]> my_row_write = new LinkedList<byte[]>();
 
-					for (int i = 0; i < bus.getUsers().size(); i++) {
-						String userName = bus.getUsers().get(i);
+					for (int i = 0; i < myBus.getUsers().size(); i++) {
+						String userName = myBus.getUsers().get(i);
 						String msg = clientMessageQueueService.getMessageFromQueue(userName);
 						/*
 						 * is there are any message for the 'userName' user in
@@ -309,16 +380,19 @@ public class ClientService {
 						 */
 						if (msg != null) {
 							/* prepare header */
-							String adrHeader = prepareHeader(bus.getUsers().get(i), bus.getLoop());
+							String adrHeader = prepareHeader(myBus.getUsers().get(i), myBus.getLoop());
 
 							/* get addrs public key and encrypt the msg */
 							byte[] cipherMsg = encryptionService.encrypt(adrHeader + msg,
-									bus.getUsersPublicKyes().get(i));
+									myBus.getUsersPublicKyes().get(i));
 
 							my_row_write.add(cipherMsg);
 
+							/* show msg also on my gui */
+							clientGUI.getMessageArea().append(name + ": " + msg + "\n");
+
 							/* delete msg from queue */
-							clientMessageQueueService.deleteMessage(bus.getUsers().get(i));
+							clientMessageQueueService.deleteMessage(myBus.getUsers().get(i));
 						} else {
 							/* w.p.p. set garbage */
 							byte[] garbage = "grb".getBytes();
@@ -328,13 +402,29 @@ public class ClientService {
 					}
 
 					// set row to the bus
-					bus.getBus().set(user_in_bus_index, my_row_write);
+					myBus.getBus().set(user_in_bus_index, my_row_write);
 
+					/* merge with global bus */
+					if (firstBus == true) {
+						globalBus = myBus;
+					} else {
+						secondBus = myBus;
+					}
+
+					/* if SHARED NODE, wait until bus will synchronized */
+					while (sendBusSemafor == false) {
+						sleep(1000);
+					}
+
+					if (sharedNode == true) {
+						myBus = globalBus;
+					}
+					
 					/* send bus */
-					outNextClient.writeObject(bus);
+					outNextClient.writeObject(myBus);
 
 					/* set bus to null */
-					bus = null;
+					myBus = null;
 
 				}
 			} catch (InterruptedException e) {
@@ -358,8 +448,9 @@ public class ClientService {
 	}
 
 	/**
-	 * Prepare header which will be put before messages.
-	 * Get userName + bus loop and hash it.
+	 * Prepare header which will be put before messages. Get userName + bus loop
+	 * and hash it.
+	 * 
 	 * @param usrName
 	 * @param loop
 	 * @return
@@ -411,12 +502,12 @@ public class ClientService {
 		ClientService.outNextClient = outNextClient;
 	}
 
-	public static Bus getBus() {
-		return bus;
+	public static Bus getGlobalBus() {
+		return globalBus;
 	}
 
-	public static void setBus(Bus bus) {
-		ClientService.bus = bus;
+	public static void setGlobalBus(Bus globalBus) {
+		ClientService.globalBus = globalBus;
 	}
 
 }

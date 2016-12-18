@@ -50,18 +50,19 @@ public class AdvancedTokenRingAlgorithm {
 		int first_ring_end;
 		int first_ring_size = 0;
 		
-		if (largeRingSize % 2 == 0) {
+		if ((largeRingSize/2) % 2 == 0) {
+			/* size of each ring will be %2=0*/
 			first_ring_start = usernameIndex - ((largeRingSize / 2 - 1)) / 2 - 1;
-			first_ring_end = usernameIndex + ((largeRingSize / 2 - 1)) / 2;
+			first_ring_end = usernameIndex + ((largeRingSize / 2 - 1)) / 2 ;
 			
 		} else {
 			/* [0...5...14] ; [2...5...8] [9...12...1]] */
 			first_ring_start = usernameIndex - ((largeRingSize / 2)) / 2;
-			first_ring_end = usernameIndex + ((largeRingSize / 2)) / 2;
+			first_ring_end = usernameIndex + ((largeRingSize / 2)) / 2 ;
 		}
 		
 		if (first_ring_start < 0)
-			first_ring_start = largeRingSize + first_ring_start - 1;
+			first_ring_start = largeRingSize + first_ring_start;
 		if (first_ring_end > largeRingSize)
 			first_ring_end = first_ring_end - largeRingSize;
 		
@@ -107,16 +108,29 @@ public class AdvancedTokenRingAlgorithm {
 		*/
 		largeRing.removeAll(newRing);
 
+		newRing.add(largeRing.get(0));
 
 		/* display new rings */
 		
 		System.out.println("newRing size = " + newRing.size());
 		System.out.println("oldRing size = " + largeRing.size());
 		
-		System.out.println("newRing = " + newRing.toString());
-		System.out.println("oldRing = " + largeRing.toString());
+		System.out.println("newRing = ");
+		displayRing(newRing);
+		System.out.println("oldRing = " );
+		displayRing(largeRing);
+		
+		/* add rings to list of rings */
+		listOfRings.add(newRing);
+		listOfRings.add(largeRing);
 	}
 	
+	public void displayRing(LinkedList<User> ring) {
+		for(int i = 0 ; i < ring.size() ; i++ ){
+			System.out.print(ring.get(i).getId() + ",");
+		}
+		System.out.println();
+	}
 	public static LinkedList<User> generateExampleList(int size) {
 		LinkedList<User> testLargeRing = new LinkedList<User>();
 		User user;
@@ -132,7 +146,7 @@ public class AdvancedTokenRingAlgorithm {
 	public static void main(String[] args) {
 		
 		/* generate test large ring */
-		LinkedList<User> testLargeRing = generateExampleList(10);
+		LinkedList<User> testLargeRing = generateExampleList(11);
 
 		AdvancedTokenRingAlgorithm advancedTokenRingAlgorithm = new AdvancedTokenRingAlgorithm(testLargeRing);
 
@@ -140,5 +154,16 @@ public class AdvancedTokenRingAlgorithm {
 		advancedTokenRingAlgorithm.createNewRing(1);
 		
 	}
+
+
+	public LinkedList<LinkedList<User>> getListOfRings() {
+		return listOfRings;
+	}
+
+	public void setListOfRings(LinkedList<LinkedList<User>> listOfRings) {
+		AdvancedTokenRingAlgorithm.listOfRings = listOfRings;
+	}
+	
+	
 
 }
